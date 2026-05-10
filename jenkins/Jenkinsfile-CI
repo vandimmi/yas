@@ -1,9 +1,12 @@
 pipeline {
     agent any
+
     environment {
-        DOCKERHUB_USER = 'vandiemmy'
-        DOCKERHUB_CRED = credentials('dockerhub-cred')  // tạo credential trong Jenkins
+        DOCKER_USER = 'vandiemmy'
+        COMMIT_ID   = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+        BRANCH      = env.BRANCH_NAME
     }
+
     triggers { githubPush() }
 
     stages {
@@ -19,19 +22,16 @@ pipeline {
                         'order','product','rating','search','tax','webhook'
                     ]
                     def changed = sh(
-                        script: 'git diff --name-only HEAD~1 HEAD || git diff --name-only HEAD',
+                        script: 'git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "all"',
                         returnStdout: true
                     ).trim().split('\n').collect { it.split('/')[0] }
 
-                    env.BUILD_SERVICES = allServices
-                        .findAll { it in changed }
-                        .join(',')
+                    def toBuild = (changed.contains('all'))
+                        ? allServices
+                        : allServices.findAll { it in changed }
 
+                    env.BUILD_SERVICES = toBuild ? toBuild.join(',') : allServices.join(',')
                     echo "Services to build: ${env.BUILD_SERVICES}"
-                    // Nếu không detect được gì (ví dụ commit đầu), build tất cả
-                    if (!env.BUILD_SERVICES) {
-                        env.BUILD_SERVICES = allServices.join(',')
-                    }
                 }
             }
         }
@@ -40,7 +40,7 @@ pipeline {
             steps {
                 script {
                     withCredentials([usernamePassword(
-                        credentialsId: 'dockerhub-creds',
+                        credentialsId: 'dockerhub-cred',
                         usernameVariable: 'USER',
                         passwordVariable: 'PASS'
                     )]) {
@@ -51,9 +51,10 @@ pipeline {
                         svc = svc.trim()
                         if (!svc) return
                         sh """
-                            docker build -t ${DOCKER_USER}/${svc}:${COMMIT_ID} \
-                                         -t ${DOCKER_USER}/${svc}:${BRANCH} \
-                                         ./${svc}
+                            docker build \
+                                -t ${DOCKER_USER}/${svc}:${COMMIT_ID} \
+                                -t ${DOCKER_USER}/${svc}:${BRANCH} \
+                                ./${svc}
                             docker push ${DOCKER_USER}/${svc}:${COMMIT_ID}
                             docker push ${DOCKER_USER}/${svc}:${BRANCH}
                         """
