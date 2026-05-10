@@ -1,4 +1,3 @@
-# istio/peer-auth.yaml
 apiVersion: security.istio.io/v1beta1
 kind: PeerAuthentication
 metadata:
@@ -6,4 +5,4 @@ metadata:
   namespace: dev
 spec:
   mtls:
-    mode: STRICT   # bắt buộc mTLS giữa tất cả services
+    mode: STRICT
