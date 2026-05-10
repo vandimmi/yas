@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: media
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: media
+  template:
+    metadata:
+      labels:
+        app: media
+    spec:
+      containers:
+        - name: media
+          image: vandiemmy/media:main
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "dev"
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: media
+spec:
+  type: NodePort
+  selector:
+    app: media
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30085

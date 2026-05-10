@@ -1,0 +1,122 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_USER  = 'vandiemmy'
+        NAMESPACE    = 'staging'
+        RELEASE_TAG  = "${TAG_NAME}"  // Jenkins inject khi build by git tag
+    }
+
+    // Job này trigger khi GitHub push tag dạng vX.Y.Z
+    triggers { githubPush() }
+
+    stages {
+        stage('Validate Tag Format') {
+            steps {
+                script {
+                    if (!env.TAG_NAME) {
+                        error "Không tìm thấy TAG_NAME — job này chỉ chạy khi có git tag"
+                    }
+                    if (!(env.TAG_NAME ==~ /v\d+\.\d+\.\d+/)) {
+                        error "Tag '${env.TAG_NAME}' không đúng format vX.Y.Z, bỏ qua"
+                    }
+                    echo "Tag hợp lệ: ${RELEASE_TAG}"
+                }
+            }
+        }
+
+        stage('Checkout Tag') {
+            steps {
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: "refs/tags/${RELEASE_TAG}"]],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/vandimmi/yas.git',
+                        credentialsId: 'github-token'
+                    ]]
+                ])
+            }
+        }
+
+        stage('Build & Push Release Images') {
+            steps {
+                script {
+                    def services = [
+                        'cart','customer','inventory','location','media',
+                        'order','product','rating','search','tax','webhook'
+                    ]
+
+                    withCredentials([usernamePassword(
+                        credentialsId: 'dockerhub-cred',
+                        usernameVariable: 'USER',
+                        passwordVariable: 'PASS'
+                    )]) {
+                        sh "echo \$PASS | docker login -u \$USER --password-stdin"
+
+                        services.each { svc ->
+                            sh """
+                                docker build \
+                                    -t ${DOCKER_USER}/${svc}:${RELEASE_TAG} \
+                                    -t ${DOCKER_USER}/${svc}:latest \
+                                    ./${svc}
+                                docker push ${DOCKER_USER}/${svc}:${RELEASE_TAG}
+                                docker push ${DOCKER_USER}/${svc}:latest
+                            """
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Create Namespace') {
+            steps {
+                sh "kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -"
+            }
+        }
+
+        stage('Deploy to Staging') {
+            steps {
+                script {
+                    def services = [
+                        'cart','customer','inventory','location','media',
+                        'order','product','rating','search','tax','webhook'
+                    ]
+
+                    services.each { svc ->
+                        sh """
+                            kubectl apply -f k8s/${svc}/ -n ${NAMESPACE}
+                            kubectl set image deployment/${svc} \
+                                ${svc}=${DOCKER_USER}/${svc}:${RELEASE_TAG} \
+                                -n ${NAMESPACE}
+                            kubectl rollout status deployment/${svc} \
+                                -n ${NAMESPACE} --timeout=120s
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('ArgoCD Sync') {
+            // Chỉ chạy nếu đã cài ArgoCD
+            when { expression { return fileExists('argocd/app-staging.yaml') } }
+            steps {
+                withCredentials([string(credentialsId: 'argocd-token', variable: 'ARGOCD_TOKEN')]) {
+                    sh """
+                        argocd app set yas-staging \
+                            --revision ${RELEASE_TAG} \
+                            --server <argocd-server-nodeport> \
+                            --auth-token \$ARGOCD_TOKEN \
+                            --insecure
+                        argocd app sync yas-staging --auth-token \$ARGOCD_TOKEN --insecure
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        always { sh 'docker logout' }
+        success { echo "Staging deployed: ${RELEASE_TAG}" }
+        failure { echo "Staging deploy failed" }
+    }
+}
