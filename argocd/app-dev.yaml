@@ -1,0 +1,19 @@
+# argocd/app-dev.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: yas-dev
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/vandimmi/yas
+    targetRevision: main
+    path: k8s
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true   # auto sync khi main thay đổi

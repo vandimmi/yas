@@ -1,0 +1,71 @@
+pipeline {
+    agent any
+    environment {
+        DOCKERHUB_USER = 'vandiemmy'
+        DOCKERHUB_CRED = credentials('dockerhub-cred')  // tạo credential trong Jenkins
+    }
+    triggers { githubPush() }
+
+    stages {
+        stage('Checkout') {
+            steps { checkout scm }
+        }
+
+        stage('Detect Changed Services') {
+            steps {
+                script {
+                    def allServices = [
+                        'cart','customer','inventory','location','media',
+                        'order','product','rating','search','tax','webhook'
+                    ]
+                    def changed = sh(
+                        script: 'git diff --name-only HEAD~1 HEAD || git diff --name-only HEAD',
+                        returnStdout: true
+                    ).trim().split('\n').collect { it.split('/')[0] }
+
+                    env.BUILD_SERVICES = allServices
+                        .findAll { it in changed }
+                        .join(',')
+
+                    echo "Services to build: ${env.BUILD_SERVICES}"
+                    // Nếu không detect được gì (ví dụ commit đầu), build tất cả
+                    if (!env.BUILD_SERVICES) {
+                        env.BUILD_SERVICES = allServices.join(',')
+                    }
+                }
+            }
+        }
+
+        stage('Build & Push') {
+            steps {
+                script {
+                    withCredentials([usernamePassword(
+                        credentialsId: 'dockerhub-creds',
+                        usernameVariable: 'USER',
+                        passwordVariable: 'PASS'
+                    )]) {
+                        sh "echo \$PASS | docker login -u \$USER --password-stdin"
+                    }
+
+                    env.BUILD_SERVICES.split(',').each { svc ->
+                        svc = svc.trim()
+                        if (!svc) return
+                        sh """
+                            docker build -t ${DOCKER_USER}/${svc}:${COMMIT_ID} \
+                                         -t ${DOCKER_USER}/${svc}:${BRANCH} \
+                                         ./${svc}
+                            docker push ${DOCKER_USER}/${svc}:${COMMIT_ID}
+                            docker push ${DOCKER_USER}/${svc}:${BRANCH}
+                        """
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always { sh 'docker logout' }
+        success { echo "CI done — commit: ${COMMIT_ID}" }
+        failure { echo "CI failed" }
+    }
+}

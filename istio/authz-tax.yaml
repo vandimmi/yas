@@ -1,0 +1,14 @@
+# istio/authz-tax.yaml
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-order-to-tax
+  namespace: dev
+spec:
+  selector:
+    matchLabels:
+      app: tax
+  rules:
+    - from:
+        - source:
+            principals: ["cluster.local/ns/dev/sa/order"]  # chỉ order service được gọi tax

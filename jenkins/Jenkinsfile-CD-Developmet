@@ -1,0 +1,84 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'cart_branch',      defaultValue: 'main')
+        string(name: 'customer_branch',  defaultValue: 'main')
+        string(name: 'inventory_branch', defaultValue: 'main')
+        string(name: 'location_branch',  defaultValue: 'main')
+        string(name: 'media_branch',     defaultValue: 'main')
+        string(name: 'order_branch',     defaultValue: 'main')
+        string(name: 'product_branch',   defaultValue: 'main')
+        string(name: 'rating_branch',    defaultValue: 'main')
+        string(name: 'search_branch',    defaultValue: 'main')
+        string(name: 'tax_branch',       defaultValue: 'main')
+        string(name: 'webhook_branch',   defaultValue: 'main')
+    }
+
+    environment {
+        DOCKER_USER = 'vandiemmy'
+        NAMESPACE   = 'developer'
+        KUBECONFIG  = credentials('kubeconfig')
+    }
+
+    stages {
+        stage('Create Namespace') {
+            steps {
+                sh "kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -"
+            }
+        }
+
+        stage('Deploy Services') {
+            steps {
+                script {
+                    def services = [
+                        'cart','customer','inventory','location','media',
+                        'order','product','rating','search','tax','webhook'
+                    ]
+
+                    services.each { svc ->
+                        def branch = params["${svc}_branch"]
+                        def tag = resolveTag(svc, branch)
+
+                        echo "Deploying ${svc} with tag: ${tag}"
+
+                        sh """
+                            kubectl apply -f k8s/${svc}/deployment.yaml -n ${NAMESPACE}
+                            kubectl set image deployment/${svc} \
+                                ${svc}=${DOCKER_USER}/${svc}:${tag} \
+                                -n ${NAMESPACE}
+                            kubectl rollout status deployment/${svc} -n ${NAMESPACE} --timeout=120s
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Print Access Info') {
+            steps {
+                script {
+                    def workerIP = sh(
+                        script: "kubectl get nodes -o wide | grep agent | awk '{print \$6}'",
+                        returnStdout: true
+                    ).trim() ?: "127.0.0.1"
+
+                    sh "kubectl get svc -n ${NAMESPACE}"
+
+                    echo """ DEPLOYMENT COMPLETE! Thêm vào file hosts:  ${workerIP}  yas.local Truy cập:                                ║
+ http://yas.local:30080  (storefront)  
+ http://yas.local:30081  (tax)        
+                    """
+                }
+            }
+        }
+    }
+}
+
+def resolveTag(svc, branch) {
+    if (!branch || branch == 'main' || branch == 'latest') return 'main'
+    def commitId = sh(
+        script: "git ls-remote https://github.com/vandimmi/yas.git refs/heads/${branch} | cut -c1-7",
+        returnStdout: true
+    ).trim()
+    return commitId ?: 'main'
+}
