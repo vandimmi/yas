@@ -57,6 +57,10 @@ pipeline {
                         svc = svc.trim()
                         if (!svc) return
                         sh """
+                            cd ${svc}
+                            chmod +x mvnw
+                            ./mvnw -q -DskipTests package
+                            cd ..
                             docker build \
                                 -t ${DOCKER_USER}/${svc}:${COMMIT_ID} \
                                 -t ${DOCKER_USER}/${svc}:${BRANCH_TAG} \
