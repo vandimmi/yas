@@ -1,0 +1,78 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_USER = 'vandiemmy'
+    }
+
+    triggers { githubPush() }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                script {
+                    env.COMMIT_ID = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    env.BRANCH = env.BRANCH_NAME ?: 'unknown'
+                    env.BRANCH_TAG = env.BRANCH.replaceAll('[^a-zA-Z0-9_.-]', '-')
+                    echo "Using commit ${env.COMMIT_ID} on branch ${env.BRANCH}"
+                }
+            }
+        }
+
+        stage('Detect Changed Services') {
+            steps {
+                script {
+                    def allServices = [
+                        'cart','customer','inventory','location','media',
+                        'order','product','rating','search','tax','webhook'
+                    ]
+                    def changed = sh(
+                        script: 'git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "all"',
+                        returnStdout: true
+                    ).trim().split('\n').collect { it.split('/')[0] }
+
+                    def toBuild = (changed.contains('all'))
+                        ? allServices
+                        : allServices.findAll { it in changed }
+
+                    env.BUILD_SERVICES = toBuild ? toBuild.join(',') : allServices.join(',')
+                    echo "Services to build: ${env.BUILD_SERVICES}"
+                }
+            }
+        }
+
+        stage('Build & Push') {
+            steps {
+                script {
+                    withCredentials([usernamePassword(
+                        credentialsId: 'dockerhub-cred',
+                        usernameVariable: 'USER',
+                        passwordVariable: 'PASS'
+                    )]) {
+                        sh "echo \$PASS | docker login -u \$USER --password-stdin"
+                    }
+
+                    env.BUILD_SERVICES.split(',').each { svc ->
+                        svc = svc.trim()
+                        if (!svc) return
+                        sh """
+                            docker build \
+                                -t ${DOCKER_USER}/${svc}:${COMMIT_ID} \
+                                -t ${DOCKER_USER}/${svc}:${BRANCH_TAG} \
+                                ./${svc}
+                            docker push ${DOCKER_USER}/${svc}:${COMMIT_ID}
+                            docker push ${DOCKER_USER}/${svc}:${BRANCH_TAG}
+                        """
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always { sh 'docker logout' }
+        success { echo "CI done — commit: ${COMMIT_ID}" }
+        failure { echo "CI failed" }
+    }
+}

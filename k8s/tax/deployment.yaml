@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tax
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tax
+  template:
+    metadata:
+      labels:
+        app: tax
+    spec:
+      containers:
+        - name: tax
+          image: vandiemmy/tax:main
+          ports:
+            - containerPort: 8080
+          env:
+            - name: ENV
+              value: "dev"
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: tax
+spec:
+  type: NodePort
+  selector:
+    app: tax
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30081

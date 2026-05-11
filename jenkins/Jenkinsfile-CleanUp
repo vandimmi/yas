@@ -1,0 +1,17 @@
+pipeline {
+    agent any
+    environment {
+        KUBECONFIG = credentials('kubeconfig')
+        NAMESPACE  = 'developer'
+    }
+    stages {
+        stage('Cleanup') {
+            steps {
+                sh """
+                    kubectl delete namespace ${NAMESPACE} --ignore-not-found=true
+                    echo "Namespace '${NAMESPACE}' đã bị xóa"
+                """
+            }
+        }
+    }
+}
