@@ -3,6 +3,7 @@ pipeline {
 
     environment {
         DOCKER_USER = 'vandiemmy'
+        REVISION = '1.0-SNAPSHOT'
     }
 
     triggers { githubPush() }
@@ -13,7 +14,8 @@ pipeline {
                 checkout scm
                 script {
                     env.COMMIT_ID = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
-                    env.BRANCH = env.BRANCH_NAME ?: 'unknown'
+                    def gitBranch = sh(script: 'git rev-parse --abbrev-ref HEAD', returnStdout: true).trim()
+                    env.BRANCH = env.BRANCH_NAME ?: (gitBranch == 'HEAD' ? 'detached' : gitBranch)
                     env.BRANCH_TAG = env.BRANCH.replaceAll('[^a-zA-Z0-9_.-]', '-')
                     echo "Using commit ${env.COMMIT_ID} on branch ${env.BRANCH}"
                 }
@@ -45,6 +47,14 @@ pipeline {
         stage('Build & Push') {
             steps {
                 script {
+                    sh """
+                        cd cart
+                        chmod +x mvnw
+                        ./mvnw -q -U -DskipTests -Drevision=${REVISION} -f ../pom.xml -N install
+                        ./mvnw -q -U -DskipTests -Drevision=${REVISION} -f ../pom.xml -pl common-library -am install
+                        cd ..
+                    """
+
                     withCredentials([usernamePassword(
                         credentialsId: 'dockerhub-cred',
                         usernameVariable: 'USER',
@@ -57,6 +67,10 @@ pipeline {
                         svc = svc.trim()
                         if (!svc) return
                         sh """
+                            cd cart
+                            chmod +x mvnw
+                            ./mvnw -q -U -DskipTests -Drevision=${REVISION} -f ../pom.xml -pl ${svc} -am package
+                            cd ..
                             docker build \
                                 -t ${DOCKER_USER}/${svc}:${COMMIT_ID} \
                                 -t ${DOCKER_USER}/${svc}:${BRANCH_TAG} \

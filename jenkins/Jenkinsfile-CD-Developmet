@@ -81,10 +81,18 @@ Truy cập trực tiếp (k3d NodePort map):
 }
 
 def resolveTag(svc, branch) {
+    if (!branch) {
+        branch = getGitBranch()
+    }
     if (!branch || branch == 'main' || branch == 'latest') return 'main'
     def commitId = sh(
         script: "git ls-remote https://github.com/vandimmi/yas.git refs/heads/${branch} | cut -c1-7",
         returnStdout: true
     ).trim()
     return commitId ?: 'main'
+}
+
+def getGitBranch() {
+    def branch = sh(script: 'git rev-parse --abbrev-ref HEAD', returnStdout: true).trim()
+    return branch == 'HEAD' ? null : branch
 }
