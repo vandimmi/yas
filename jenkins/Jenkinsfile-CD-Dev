@@ -20,9 +20,11 @@ pipeline {
         stage('Verify Branch') {
             steps {
                 script {
-                    if (env.BRANCH_NAME != 'main') {
+                    def gitBranch = sh(script: 'git rev-parse --abbrev-ref HEAD', returnStdout: true).trim()
+                    def actualBranch = env.BRANCH_NAME ?: (gitBranch == 'HEAD' ? 'detached' : gitBranch)
+                    if (actualBranch != 'main') {
                         currentBuild.result = 'ABORTED'
-                        error "Job này chỉ chạy trên branch main, hiện tại: ${env.BRANCH_NAME}"
+                        error "Job này chỉ chạy trên branch main, hiện tại: ${actualBranch}"
                     }
                     echo "Branch hợp lệ: main"
                 }
