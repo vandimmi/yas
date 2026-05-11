@@ -21,10 +21,17 @@ pipeline {
             steps {
                 script {
                     def gitBranch = sh(script: 'git rev-parse --abbrev-ref HEAD', returnStdout: true).trim()
-                    def actualBranch = env.BRANCH_NAME ?: (gitBranch == 'HEAD' ? 'detached' : gitBranch)
-                    if (actualBranch != 'main') {
+                    def actualBranch = env.BRANCH_NAME ?: env.GIT_BRANCH ?: (gitBranch == 'HEAD' ? '' : gitBranch)
+                    if (!actualBranch) {
+                        actualBranch = sh(script: 'git name-rev --name-only --no-undefined HEAD | sed "s#^origin/##"', returnStdout: true).trim()
+                    }
+                    if (!actualBranch || actualBranch == 'HEAD') {
+                        actualBranch = 'detached'
+                    }
+                    def normalizedBranch = actualBranch?.replaceFirst('^origin/', '')
+                    if (normalizedBranch != 'main') {
                         currentBuild.result = 'ABORTED'
-                        error "Job này chỉ chạy trên branch main, hiện tại: ${actualBranch}"
+                        error "Job này chỉ chạy trên branch main, hiện tại: ${normalizedBranch}"
                     }
                     echo "Branch hợp lệ: main"
                 }
