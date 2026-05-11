@@ -116,6 +116,3 @@ public class TaxRateController {
         return ResponseEntity.ok(taxRateService.getBulkTaxRate(taxClassIds, countryId, stateOrProvinceId, zipCode));
     }
 }
-
-# toi de
-# toi de test
