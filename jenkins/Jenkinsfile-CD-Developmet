@@ -44,7 +44,7 @@ pipeline {
                         echo "Deploying ${svc} with tag: ${tag}"
 
                         sh """
-                            kubectl apply -f k8s/${svc}/deployment.yaml -n ${NAMESPACE}
+                            sed 's/nodePort: 300/nodePort: 310/g' k8s/${svc}/deployment.yaml | kubectl apply -n ${NAMESPACE} -f -
                             kubectl set image deployment/${svc} \
                                 ${svc}=${REGISTRY}/${svc}:${tag} \
                                 -n ${NAMESPACE}
@@ -61,19 +61,19 @@ pipeline {
                     sh "kubectl get svc -n ${NAMESPACE}"
 
                     echo """ DEPLOYMENT COMPLETE!
-Truy cập trực tiếp (k3d NodePort map):
- http://localhost:30080  (storefront)
- http://localhost:30081  (tax)
- http://localhost:30082  (cart)
- http://localhost:30083  (customer)
- http://localhost:30084  (location)
- http://localhost:30085  (media)
- http://localhost:30086  (order)
- http://localhost:30087  (product)
- http://localhost:30088  (rating)
- http://localhost:30089  (search)
- http://localhost:30090  (inventory)
- http://localhost:30091  (webhook)
+                        Truy cập trực tiếp (k3d NodePort map):
+                        http://localhost:30080  (storefront)
+                        http://localhost:31081  (tax)
+                        http://localhost:31082  (cart)
+                        http://localhost:31083  (customer)
+                        http://localhost:31084  (location)
+                        http://localhost:31085  (media)
+                        http://localhost:31086  (order)
+                        http://localhost:31087  (product)
+                        http://localhost:31088  (rating)
+                        http://localhost:31089  (search)
+                        http://localhost:31090  (inventory)
+                        http://localhost:31091  (webhook)
                     """
                 }
             }

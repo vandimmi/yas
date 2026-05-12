@@ -11,9 +11,9 @@ Tạo Jenkins job để xóa phần triển khai ở mục 4 (https://community.
 Bỏ qua phần này nếu làm phần Nâng Cao: Tương tự, trên Jenkins tạo ra 2 job CI/CD để deploy "dev" và "staging".
 main thay đổi, auto sẽ deploy đè liên tục vào trong namespace dev
 Staging: trên "main" branch sẽ có đáng tag để có dạng release, ví dụ: tag v1.2.3. thì job CI/CD sẽ phát hiện và build image với tag cuối cùng, ví dụ tag v1.2.3 (hoặc tách branch rc_v1.2.3, hoặc vừa tag và tách branch), sau đó push images này lên Docker Hub và deploy vào trong namespace "staging"
-Nâng cao (2đ): Sử dụng AgroCD để handle được "dev" và "staging"
+Sử dụng AgroCD để handle được "dev" và "staging"
 
-Nâng cao (2đ): Thực hành cấu hình Service Mesh (mTLS, chính sách kết nối) trên K8S cho ứng dụng microservices
+Thực hành cấu hình Service Mesh (mTLS, chính sách kết nối) trên K8S cho ứng dụng microservices
 1. Enable TLS (mTLS) giữa các service deploy trên K8S cho ứng dụng yas
 2. Vẽ flow chart/Topology của các service (sử dụng Kiali để quan sát).
 3. Chuẩn bị kịch bản test:
