@@ -15,6 +15,10 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
+                script {
+                    env.IMAGE_TAG = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    echo "Using image tag: ${env.IMAGE_TAG}"
+                }
             }
         }
 
@@ -41,6 +45,7 @@ pipeline {
 
         stage('Create Namespace') {
             steps {
+                sh "kubectl config view --minify"
                 sh "kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -"
             }
         }
@@ -54,11 +59,11 @@ pipeline {
                     ]
 
                     services.each { svc ->
-                        echo ">>> Deploying ${svc}:main to namespace ${NAMESPACE}"
+                        echo ">>> Deploying ${svc}:${IMAGE_TAG} to namespace ${NAMESPACE}"
                         sh """
                             kubectl apply -f k8s/${svc}/ -n ${NAMESPACE}
                             kubectl set image deployment/${svc} \
-                                ${svc}=${REGISTRY}/${svc}:main \
+                                ${svc}=${DOCKER_USER}/${svc}:${IMAGE_TAG} \
                                 -n ${NAMESPACE}
                             kubectl rollout status deployment/${svc} \
                                 -n ${NAMESPACE} --timeout=120s
@@ -72,20 +77,26 @@ pipeline {
             // Chỉ chạy nếu đã cài ArgoCD
             when { expression { return fileExists('argocd/app-dev.yaml') } }
             steps {
-                withCredentials([string(credentialsId: 'argocd-token', variable: 'ARGOCD_TOKEN')]) {
-                    sh """
-                        argocd app sync yas-dev \
-                            --server <argocd-server-nodeport> \
-                            --auth-token \$ARGOCD_TOKEN \
-                            --insecure
-                    """
+                script {
+                    try {
+                        withCredentials([string(credentialsId: 'argocd-token', variable: 'ARGOCD_TOKEN')]) {
+                            sh """
+                                argocd app sync yas-dev \
+                                    --server <argocd-server-nodeport> \
+                                    --auth-token \$ARGOCD_TOKEN \
+                                    --insecure
+                            """
+                        }
+                    } catch (err) {
+                        echo "Skipping ArgoCD sync: missing credential 'argocd-token'"
+                    }
                 }
             }
         }
     }
 
     post {
-        success { echo "Dev deployed — image tag: main" }
+        success { echo "Dev deployed — image tag: ${IMAGE_TAG}" }
         failure { echo "Dev deploy failed" }
     }
 }
