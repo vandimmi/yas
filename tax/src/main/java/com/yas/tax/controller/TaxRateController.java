@@ -53,7 +53,7 @@ public class TaxRateController {
     public ResponseEntity<TaxRateVm> getTaxRate(@PathVariable("id") final Long id) {
         return ResponseEntity.ok(taxRateService.findById(id));
     }
-    // TODO: Add filter 
+    // TODO: Add filtering and sorting
 
     @PostMapping
     @ApiResponses(value = {
