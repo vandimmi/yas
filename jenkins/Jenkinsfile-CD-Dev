@@ -3,6 +3,7 @@ pipeline {
 
     environment {
         DOCKER_USER = 'vandiemmy'
+        REGISTRY   = 'k3d-k3d-registry.localhost:5000'
         NAMESPACE   = 'dev'
         KUBECONFIG  = credentials('kubeconfig')
     }
@@ -57,7 +58,7 @@ pipeline {
                         sh """
                             kubectl apply -f k8s/${svc}/ -n ${NAMESPACE}
                             kubectl set image deployment/${svc} \
-                                ${svc}=${DOCKER_USER}/${svc}:main \
+                                ${svc}=${REGISTRY}/${svc}:main \
                                 -n ${NAMESPACE}
                             kubectl rollout status deployment/${svc} \
                                 -n ${NAMESPACE} --timeout=120s

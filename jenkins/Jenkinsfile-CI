@@ -1,9 +1,14 @@
 pipeline {
     agent any
 
+    parameters {
+        booleanParam(name: 'BUILD_ALL', defaultValue: true, description: 'Build all services')
+    }
+
     environment {
         DOCKER_USER = 'vandiemmy'
         REVISION = '1.0-SNAPSHOT'
+        LOCAL_REGISTRY = 'localhost:5000'
     }
 
     triggers { githubPush() }
@@ -29,6 +34,11 @@ pipeline {
                         'cart','customer','inventory','location','media',
                         'order','product','rating','search','tax','webhook'
                     ]
+                    if (params.BUILD_ALL) {
+                        env.BUILD_SERVICES = allServices.join(',')
+                        echo "Services to build (forced): ${env.BUILD_SERVICES}"
+                        return
+                    }
                     def changed = sh(
                         script: 'git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "all"',
                         returnStdout: true
@@ -75,8 +85,12 @@ pipeline {
                                 -t ${DOCKER_USER}/${svc}:${COMMIT_ID} \
                                 -t ${DOCKER_USER}/${svc}:${BRANCH_TAG} \
                                 ./${svc}
+                            docker tag ${DOCKER_USER}/${svc}:${COMMIT_ID} ${LOCAL_REGISTRY}/${svc}:${COMMIT_ID}
+                            docker tag ${DOCKER_USER}/${svc}:${BRANCH_TAG} ${LOCAL_REGISTRY}/${svc}:${BRANCH_TAG}
                             docker push ${DOCKER_USER}/${svc}:${COMMIT_ID}
                             docker push ${DOCKER_USER}/${svc}:${BRANCH_TAG}
+                            docker push ${LOCAL_REGISTRY}/${svc}:${COMMIT_ID}
+                            docker push ${LOCAL_REGISTRY}/${svc}:${BRANCH_TAG}
                         """
                     }
                 }
