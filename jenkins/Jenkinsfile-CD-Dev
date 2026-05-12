@@ -1,9 +1,14 @@
 pipeline {
     agent any
 
+    parameters {
+        string(name: 'SERVICES', defaultValue: 'cart,customer,inventory,location,media,order,product,rating,search,tax,webhook', description: 'Comma-separated services to deploy')
+        string(name: 'ARGOCD_SERVER', defaultValue: 'https://host.docker.internal:8085', description: 'ArgoCD server URL')
+    }
+
     environment {
         DOCKER_USER = 'vandiemmy'
-        REGISTRY   = 'k3d-k3d-registry.localhost:5000'
+        REGISTRY   = 'k3d-registry.localhost:5000'
         NAMESPACE   = 'dev'
         KUBECONFIG  = credentials('kubeconfig')
     }
@@ -53,17 +58,14 @@ pipeline {
         stage('Deploy All Services') {
             steps {
                 script {
-                    def services = [
-                        'cart','customer','inventory','location','media',
-                        'order','product','rating','search','tax','webhook'
-                    ]
+                    def services = params.SERVICES.split(',').collect { it.trim() }.findAll { it }
 
                     services.each { svc ->
                         echo ">>> Deploying ${svc}:${IMAGE_TAG} to namespace ${NAMESPACE}"
                         sh """
                             kubectl apply -f k8s/${svc}/ -n ${NAMESPACE}
                             kubectl set image deployment/${svc} \
-                                ${svc}=${DOCKER_USER}/${svc}:${IMAGE_TAG} \
+                                ${svc}=${REGISTRY}/${svc}:${IMAGE_TAG} \
                                 -n ${NAMESPACE}
                             kubectl rollout status deployment/${svc} \
                                 -n ${NAMESPACE} --timeout=120s
@@ -82,7 +84,7 @@ pipeline {
                         withCredentials([string(credentialsId: 'argocd-token', variable: 'ARGOCD_TOKEN')]) {
                             sh """
                                 argocd app sync yas-dev \
-                                    --server <argocd-server-nodeport> \
+                                    --server ${params.ARGOCD_SERVER} \
                                     --auth-token \$ARGOCD_TOKEN \
                                     --insecure
                             """

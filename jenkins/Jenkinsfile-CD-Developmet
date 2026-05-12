@@ -17,7 +17,7 @@ pipeline {
 
     environment {
         DOCKER_USER = 'vandiemmy'
-        REGISTRY   = 'k3d-k3d-registry.localhost:5000'
+        REGISTRY   = 'k3d-registry.localhost:5000'
         NAMESPACE   = 'developer'
         KUBECONFIG  = credentials('kubeconfig')
     }
