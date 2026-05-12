@@ -3,7 +3,7 @@ pipeline {
 
     parameters {
         string(name: 'SERVICES', defaultValue: 'cart,customer,inventory,location,media,order,product,rating,search,tax,webhook', description: 'Comma-separated services to deploy')
-        string(name: 'ARGOCD_SERVER', defaultValue: 'https://host.docker.internal:8085', description: 'ArgoCD server URL')
+        string(name: 'ARGOCD_SERVER', defaultValue: 'host.docker.internal:8085', description: 'ArgoCD server host:port')
     }
 
     environment {
@@ -81,16 +81,26 @@ pipeline {
             steps {
                 script {
                     try {
+                        def hasArgoCd = sh(script: 'command -v argocd >/dev/null 2>&1', returnStatus: true) == 0
+                        if (!hasArgoCd) {
+                            echo "Skipping ArgoCD sync: argocd CLI not installed"
+                            return
+                        }
+                        def argocdServer = params.ARGOCD_SERVER
+                            .trim()
+                            .replaceFirst('^https?://', '')
+                            .replaceAll('/$', '')
+                        echo "Syncing ArgoCD app yas-dev via ${argocdServer}"
                         withCredentials([string(credentialsId: 'argocd-token', variable: 'ARGOCD_TOKEN')]) {
                             sh """
                                 argocd app sync yas-dev \
-                                    --server ${params.ARGOCD_SERVER} \
+                                    --server ${argocdServer} \
                                     --auth-token \$ARGOCD_TOKEN \
                                     --insecure
                             """
                         }
                     } catch (err) {
-                        echo "Skipping ArgoCD sync: missing credential 'argocd-token'"
+                        error "ArgoCD sync failed: ${err}"
                     }
                 }
             }
